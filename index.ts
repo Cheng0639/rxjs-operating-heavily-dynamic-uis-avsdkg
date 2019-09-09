@@ -1,6 +1,6 @@
-import {Counter, CountDownState, ConterStateKeys} from './counter'
-import { merge , NEVER, interval} from 'rxjs'; 
-import { mapTo , switchMap , scan} from 'rxjs/operators';
+import { Counter, CountDownState, ConterStateKeys } from './counter'
+import { merge, NEVER, interval } from 'rxjs';
+import { map, mapTo, switchMap, scan ,startWith, shareReplay} from 'rxjs/operators';
 
 // EXERCISE DESCRIPTION ==============================
 
@@ -23,11 +23,11 @@ import { mapTo , switchMap , scan} from 'rxjs/operators';
 
 
 const initialConterState: CountDownState = {
-  isTicking: false, 
-  count: 0, 
-  countUp: true, 
-  tickSpeed: 200, 
-  countDiff:1
+  isTicking: false,
+  count: 0,
+  countUp: true,
+  tickSpeed: 200,
+  countDiff: 1
 };
 
 const counterUI = new Counter(
@@ -38,14 +38,21 @@ const counterUI = new Counter(
     initialCountDiff: initialConterState.countDiff,
   }
 );
-
-merge(
-  counterUI.btnStart$.pipe(mapTo(true)),
-  counterUI.btnPause$.pipe(mapTo(false)),
-).pipe(
-  switchMap( isTicking => isTicking? interval(initialConterState.tickSpeed):NEVER),
-  scan((acc) => acc + initialConterState.countDiff , 0)
+// === SOURCE OBSERVABLES ==========================================
+const counterCommand$ = merge(
+  counterUI.btnStart$.pipe(mapTo({ isTicking: true })),
+  counterUI.btnPause$.pipe(mapTo({ isTicking: false })),
+  counterUI.btnSetTo$.pipe(map(n => { count: n })),
+  counterUI.btnUp$.pipe(mapTo({ countUp: true })),
+  counterUI.btnDown$.pipe(mapTo({ countUp: false })),
+  counterUI.btnReset$.pipe(mapTo({ ...initialConterState })),
+  counterUI.inputTickSpeed$.pipe(map(n => { tickSpeed: n })),
+  counterUI.inputCountDiff$.pipe(map(n => { count: n })),
 )
-.subscribe(
-  s => counterUI.renderCounterValue(s)
-);
+
+// === STATE OBSERVABLES ===========================================
+const counterState$ = counterCommand$.pipe(
+  startWith(initialConterState),
+  scan((acc, command) => ({ ...acc, ...command }), initialConterState),shareReplay(1))
+
+counterState$.pipe(map(state => state.count)).subscribe(console.log)
